@@ -7,14 +7,51 @@ import {
   localSuggestions,
   pickGreeting,
 } from '../lib/suggestions.jsx'
+import { cityLabel, detectLocation, withCity } from '../lib/location.jsx'
 
 const LIST_ID = 'suggestions'
 const HIDE_BTN_KEY = 'hideSearchBtn'
+const THEME_KEY = 'theme'
+const CITY_KEY = 'city'
+
+function readStore(key, fallback) {
+  try {
+    const v = localStorage.getItem(key)
+    return v === null ? fallback : v
+  } catch {
+    return fallback
+  }
+}
+
+function writeStore(key, value) {
+  try {
+    localStorage.setItem(key, value)
+  } catch {
+    /* storage unavailable */
+  }
+}
 
 export function doSearch(query) {
   const q = query.trim()
   if (!q) return
   window.location.href = buildGoogleUrl(q)
+}
+
+function SunIcon() {
+  return (
+    <svg className="theme-icon icon-sun" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+    </svg>
+  )
+}
+
+function MoonIcon() {
+  return (
+    <svg className="theme-icon icon-moon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+    </svg>
+  )
 }
 
 function GearIcon() {
@@ -45,13 +82,15 @@ export default function SearchInterface() {
   const [loading, setLoading] = useState(false)
   const [active, setActive] = useState(-1)
   const [popupOpen, setPopupOpen] = useState(false)
-  const [hideBtn, setHideBtn] = useState(() => {
-    try {
-      return localStorage.getItem(HIDE_BTN_KEY) === 'true'
-    } catch {
-      return false
-    }
+  const [hideBtn, setHideBtn] = useState(() => readStore(HIDE_BTN_KEY, 'false') === 'true')
+  const [theme, setTheme] = useState(() =>
+    readStore(THEME_KEY, 'dark') === 'light' ? 'light' : 'dark',
+  )
+  const [location, setLocation] = useState(() => {
+    const stored = readStore(CITY_KEY, '')
+    return stored ? { city: stored, region: '', country: '' } : null
   })
+  const [locating, setLocating] = useState(false)
 
   const inputRef = useRef(null)
   const areaRef = useRef(null)
@@ -62,6 +101,60 @@ export default function SearchInterface() {
   useEffect(() => {
     inputRef.current?.focus()
   }, [])
+
+  // Apply theme to the document root (needed for the Safari theme-color tint)
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    document.documentElement.style.colorScheme = theme
+    const meta = document.querySelector('meta[name="theme-color"]')
+    if (meta) meta.setAttribute('content', theme === 'light' ? '#ffffff' : '#000000')
+  }, [theme])
+
+  // Detect the city once, so locality-style queries can be biased toward it.
+  useEffect(() => {
+    if (location || locating) return
+    let cancelled = false
+    setLocating(true)
+    detectLocation()
+      .then((data) => {
+        if (cancelled) return
+        if (data.city) {
+          setLocation(data)
+          writeStore(CITY_KEY, data.city)
+        }
+      })
+      .catch(() => {
+        /* geolocation unavailable - suggestions stay un-biased */
+      })
+      .finally(() => {
+        if (!cancelled) setLocating(false)
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const handleToggleTheme = () => {
+    const next = theme === 'dark' ? 'light' : 'dark'
+    setTheme(next)
+    writeStore(THEME_KEY, next)
+  }
+
+  const handleClearLocation = () => {
+    setLocation(null)
+    writeStore(CITY_KEY, '')
+    setLocating(true)
+    detectLocation()
+      .then((data) => {
+        if (data.city) {
+          setLocation(data)
+          writeStore(CITY_KEY, data.city)
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLocating(false))
+  }
 
   // Hide suggestions / settings popup when clicking outside.
   useEffect(() => {
@@ -86,11 +179,7 @@ export default function SearchInterface() {
 
   const handleToggleHideBtn = (checked) => {
     setHideBtn(checked)
-    try {
-      localStorage.setItem(HIDE_BTN_KEY, checked ? 'true' : 'false')
-    } catch {
-      /* storage unavailable */
-    }
+    writeStore(HIDE_BTN_KEY, checked ? 'true' : 'false')
   }
 
   const handleChange = (value) => {
@@ -100,16 +189,20 @@ export default function SearchInterface() {
     const id = requestIdRef.current
     const trimmedQuery = value.trim()
 
+    // Locality-style queries ("near me", "delivery") get the detected
+    // city appended so the results are actually relevant to the user.
+    const suggestQuery = location?.city ? withCity(trimmedQuery, location.city) : trimmedQuery
+
     // Inline suggestion roll, from local matches immediately
-    const allLocal = localSuggestions(trimmedQuery)
+    const allLocal = localSuggestions(suggestQuery)
     if (
-      trimmedQuery &&
+      suggestQuery &&
       allLocal.length > 0 &&
-      allLocal[0].toLowerCase().startsWith(trimmedQuery.toLowerCase()) &&
-      allLocal[0] !== trimmedQuery
+      allLocal[0].toLowerCase().startsWith(suggestQuery.toLowerCase()) &&
+      allLocal[0] !== suggestQuery
     ) {
       // Match case of user input, append rest of suggestion
-      setInline(value + allLocal[0].substring(trimmedQuery.length))
+      setInline(value + allLocal[0].substring(suggestQuery.length))
     } else {
       setInline('')
     }
@@ -127,7 +220,7 @@ export default function SearchInterface() {
 
     // Fetch live suggestions with slight debounce
     timerRef.current = setTimeout(async () => {
-      const live = await fetchLiveSuggestions(trimmedQuery)
+      const live = await fetchLiveSuggestions(suggestQuery)
       if (id !== requestIdRef.current) return
       setLoading(false)
       if (live && live.length > 0) {
@@ -136,13 +229,13 @@ export default function SearchInterface() {
         setShowSuggestions(true)
         // Update inline suggestion with live data if applicable
         if (
-          live[0].toLowerCase().startsWith(trimmedQuery.toLowerCase()) &&
-          live[0] !== trimmedQuery
+          live[0].toLowerCase().startsWith(suggestQuery.toLowerCase()) &&
+          live[0] !== suggestQuery
         ) {
-          setInline(value + live[0].substring(trimmedQuery.length))
+          setInline(value + live[0].substring(suggestQuery.length))
         }
       } else {
-        setSuggestions(localSuggestions(trimmedQuery))
+        setSuggestions(localSuggestions(suggestQuery))
         setActive(-1)
         setShowSuggestions(true)
       }
@@ -213,7 +306,27 @@ export default function SearchInterface() {
           </button>
           <div className={`popup-menu${popupOpen ? ' show' : ''}`}>
             <div className="popup-header">Preferences</div>
-            <label className="setting-row">
+
+            <div className="setting-row theme-row">
+              <span className="theme-label">
+                <span>Light theme</span>
+                <span className="theme-hint">Switch between dark and white</span>
+              </span>
+              <button
+                type="button"
+                className="theme-toggle"
+                role="switch"
+                aria-checked={theme === 'light'}
+                aria-label="Light theme"
+                title="Toggle theme"
+                onClick={handleToggleTheme}
+              >
+                <MoonIcon />
+                <SunIcon />
+              </button>
+            </div>
+
+            <div className="setting-row">
               <span>Hide search button</span>
               <span className="switch">
                 <input
@@ -224,7 +337,35 @@ export default function SearchInterface() {
                 />
                 <span className="slider"></span>
               </span>
-            </label>
+            </div>
+
+            <div className="setting-row theme-row">
+              <span className="theme-label">
+                <span>Better suggestions</span>
+                <span className="location-hint">
+                  {locating
+                    ? 'Detecting your location…'
+                    : location
+                      ? 'Local results are biased to your city'
+                      : 'Location unavailable'}
+                </span>
+                {location && <span className="location-value">{location.city}</span>}
+              </span>
+              {location && (
+                <button
+                  type="button"
+                  className="icon-btn"
+                  aria-label="Re-detect location"
+                  title="Re-detect location"
+                  onClick={handleClearLocation}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M21 12a9 9 0 1 1-2.6-6.4" />
+                    <path d="M21 3v6h-6" />
+                  </svg>
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -292,6 +433,12 @@ export default function SearchInterface() {
             onSelect={handleSelect}
             listId={LIST_ID}
           />
+
+          {location && !loading && !showSuggestions && (
+            <p className="location-hint" aria-live="polite">
+              Using your location: <strong>{location.city}</strong>
+            </p>
+          )}
         </div>
       </main>
     </div>
