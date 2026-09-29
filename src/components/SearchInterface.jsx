@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import SearchInput from './SearchInput.jsx'
 import Suggestions from './Suggestions.jsx'
 import {
@@ -455,7 +455,16 @@ export default function SearchInterface() {
       </div>
 
       <main className="center">
-        <h1 className="title">{greeting}</h1>
+        <h1 className="title">
+          {greeting.split(' ').map((word, i, arr) => (
+            <Fragment key={`${word}-${i}`}>
+              <span className="word" style={{ '--i': i }}>
+                {word}
+              </span>
+              {i < arr.length - 1 ? ' ' : ''}
+            </Fragment>
+          ))}
+        </h1>
 
         <div
           className="search-area"
