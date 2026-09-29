@@ -63,6 +63,50 @@ function GearIcon() {
   )
 }
 
+function CloseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  )
+}
+
+function SunLineIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+    </svg>
+  )
+}
+
+function SearchLineIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="10.8" cy="10.8" r="6.5" />
+      <path d="m15.7 15.7 4.1 4.1" />
+    </svg>
+  )
+}
+
+function PinIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 21.5s7-6 7-11.5a7 7 0 1 0-14 0c0 5.5 7 11.5 7 11.5z" />
+      <circle cx="12" cy="10" r="2.6" />
+    </svg>
+  )
+}
+
+function RefreshIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M20.5 12a8.5 8.5 0 1 1-2.5-6" />
+      <path d="M20.5 3.5V9H15" />
+    </svg>
+  )
+}
+
 function SkeletonIcon() {
   return (
     <svg viewBox="0 0 24 24" className="skeleton-icon" aria-hidden="true">
@@ -304,67 +348,107 @@ export default function SearchInterface() {
           >
             <GearIcon />
           </button>
-          <div className={`popup-menu${popupOpen ? ' show' : ''}`}>
-            <div className="popup-header">Preferences</div>
-
-            <div className="setting-row theme-row">
-              <span className="theme-label">
-                <span>Light theme</span>
-                <span className="theme-hint">Switch between dark and white</span>
-              </span>
+          <div
+            className={`popup-menu${popupOpen ? ' show' : ''}`}
+            role="dialog"
+            aria-label="Preferences"
+            aria-hidden={!popupOpen}
+          >
+            <div className="popup-header">
+              <span className="popup-title">Preferences</span>
               <button
                 type="button"
-                className="theme-toggle"
-                role="switch"
-                aria-checked={theme === 'light'}
-                aria-label="Light theme"
-                title="Toggle theme"
-                onClick={handleToggleTheme}
+                className="popup-close"
+                aria-label="Close settings"
+                title="Close"
+                onClick={() => setPopupOpen(false)}
               >
-                <MoonIcon />
-                <SunIcon />
+                <CloseIcon />
               </button>
             </div>
 
-            <div className="setting-row">
-              <span>Hide search button</span>
-              <span className="switch">
-                <input
-                  type="checkbox"
-                  checked={hideBtn}
-                  onChange={(e) => handleToggleHideBtn(e.target.checked)}
-                  aria-label="Hide search button"
-                />
-                <span className="slider"></span>
-              </span>
-            </div>
-
-            <div className="setting-row theme-row">
-              <span className="theme-label">
-                <span>Better suggestions</span>
-                <span className="location-hint">
-                  {locating
-                    ? 'Detecting your location…'
-                    : location
-                      ? 'Local results are biased to your city'
-                      : 'Location unavailable'}
+            <div className="popup-section">
+              <div className="popup-section-label">Appearance</div>
+              <div className="setting-row">
+                <span className="setting-label">
+                  <span className="setting-icon" aria-hidden="true">
+                    <SunLineIcon />
+                  </span>
+                  <span className="setting-text">
+                    <span className="setting-title">Light theme</span>
+                    <span className="setting-hint">Switch between dark and white</span>
+                  </span>
                 </span>
-                {location && <span className="location-value">{location.city}</span>}
-              </span>
-              {location && (
                 <button
                   type="button"
-                  className="icon-btn"
+                  className="theme-toggle"
+                  role="switch"
+                  aria-checked={theme === 'light'}
+                  aria-label="Light theme"
+                  title="Toggle theme"
+                  onClick={handleToggleTheme}
+                >
+                  <MoonIcon />
+                  <SunIcon />
+                </button>
+              </div>
+            </div>
+
+            <div className="popup-section">
+              <div className="popup-section-label">Search</div>
+              <label className="setting-row">
+                <span className="setting-label">
+                  <span className="setting-icon" aria-hidden="true">
+                    <SearchLineIcon />
+                  </span>
+                  <span className="setting-text">
+                    <span className="setting-title">Hide search button</span>
+                    <span className="setting-hint">Submit with Enter instead</span>
+                  </span>
+                </span>
+                <span className="switch">
+                  <input
+                    type="checkbox"
+                    checked={hideBtn}
+                    onChange={(e) => handleToggleHideBtn(e.target.checked)}
+                    aria-label="Hide search button"
+                  />
+                  <span className="slider"></span>
+                </span>
+              </label>
+            </div>
+
+            <div className="popup-section">
+              <div className="popup-section-label">Suggestions</div>
+              <div className="setting-row">
+                <span className="setting-label">
+                  <span className="setting-icon" aria-hidden="true">
+                    <PinIcon />
+                  </span>
+                  <span className="setting-text">
+                    <span className="setting-title">
+                      {location ? location.city : 'Your city'}
+                    </span>
+                    <span className="setting-hint">
+                      {locating
+                        ? 'Detecting your location…'
+                        : location
+                          ? 'Local results are biased to your city'
+                          : 'Location unavailable'}
+                    </span>
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  className={`mini-btn${locating ? ' spinning' : ''}`}
                   aria-label="Re-detect location"
                   title="Re-detect location"
+                  disabled={locating}
                   onClick={handleClearLocation}
                 >
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M21 12a9 9 0 1 1-2.6-6.4" />
-                    <path d="M21 3v6h-6" />
-                  </svg>
+                  <RefreshIcon />
                 </button>
-              )}
+              </div>
             </div>
           </div>
         </div>
@@ -433,12 +517,6 @@ export default function SearchInterface() {
             onSelect={handleSelect}
             listId={LIST_ID}
           />
-
-          {location && !loading && !showSuggestions && (
-            <p className="location-hint" aria-live="polite">
-              Using your location: <strong>{location.city}</strong>
-            </p>
-          )}
         </div>
       </main>
     </div>
