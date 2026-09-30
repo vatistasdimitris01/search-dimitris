@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { buildGoogleUrl, highlightParts } from '../lib/suggestions.jsx'
 import {
-  duckSearchUrl,
   fetchDuckAnswerWithTimeout,
   fetchWikiResultsWithTimeout,
 } from '../lib/search.jsx'
@@ -28,14 +27,6 @@ function ExternalIcon() {
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M14 4h6v6M20 4l-8 8M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />
     </svg>
-  )
-}
-
-function DdgMark() {
-  return (
-    <span className="ddg-mark" aria-hidden="true">
-      DDG
-    </span>
   )
 }
 
@@ -179,8 +170,8 @@ export default function ResultsPage({ query, onSearch, onHome }) {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Search DuckDuckGo…"
-            aria-label="Search DuckDuckGo"
+            placeholder="Search again…"
+            aria-label="Search"
             autoCapitalize="off"
             autoCorrect="off"
             spellCheck="false"
@@ -196,15 +187,16 @@ export default function ResultsPage({ query, onSearch, onHome }) {
           <span className="results-query">
             <Highlighted text={query} query={query} />
           </span>
-          <span className="ddg-chip">
-            <DdgMark />
-            DuckDuckGo
-          </span>
+          {!state.loading && (
+            <span className="results-count">
+              {total} {total === 1 ? 'result' : 'results'}
+            </span>
+          )}
         </div>
 
         {state.duckFailed && !state.wikiFailed && !state.loading && (
           <p className="results-note">
-            DuckDuckGo did not answer — showing Wikipedia articles instead.
+            Quick answers are unavailable right now — showing articles only.
           </p>
         )}
 
@@ -217,17 +209,17 @@ export default function ResultsPage({ query, onSearch, onHome }) {
             )}
 
             <div className="answer-main">
-              <div className="answer-head">
-                {duck.abstractSource || 'DuckDuckGo'}
-                {duck.abstractUrl && (
-                  <>
-                    {' · '}
+              {(duck.abstractSource || duck.abstractUrl) && (
+                <div className="answer-head">
+                  {duck.abstractSource && duck.abstractSource}
+                  {duck.abstractSource && duck.abstractUrl && ' · '}
+                  {duck.abstractUrl && (
                     <a href={duck.abstractUrl} target="_blank" rel="noreferrer noopener">
-                      {duck.abstractSource || 'Source'}
+                      Source
                     </a>
-                  </>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
 
               <h1 className="answer-title">
                 <Highlighted text={duck.heading} query={query} />
@@ -258,7 +250,7 @@ export default function ResultsPage({ query, onSearch, onHome }) {
         ) : (
           state.loading && (
             <div className="result-list" aria-live="polite" aria-busy="true">
-              <span className="sr-only">Searching DuckDuckGo…</span>
+              <span className="sr-only">Searching…</span>
               <AnswerSkeleton />
             </div>
           )
@@ -323,16 +315,15 @@ export default function ResultsPage({ query, onSearch, onHome }) {
             <h2 className="results-section">Related searches</h2>
             <div className="related-list">
               {duck.related.map((item) => (
-                <a
+                <button
+                  type="button"
                   className="related-chip"
                   key={item.url}
-                  href={item.url}
-                  target="_blank"
-                  rel="noreferrer noopener"
                   title={item.snippet || item.title}
+                  onClick={() => onSearch(item.title)}
                 >
                   {item.title}
-                </a>
+                </button>
               ))}
             </div>
           </>
@@ -346,24 +337,20 @@ export default function ResultsPage({ query, onSearch, onHome }) {
         )}
 
         {!state.loading && !bothFailed && total === 0 && (
-          <p className="results-empty">
-            <strong>No in-app results</strong>
-            This site uses DuckDuckGo answers and Wikipedia articles — try a
-            different wording, or open the full search on DuckDuckGo below.
-          </p>
+          <div className="results-empty">
+            <strong>No results for this one</strong>
+            Try different wording, or search Google instead.
+            <a
+              className="results-escape"
+              href={buildGoogleUrl(query)}
+              target="_blank"
+              rel="noreferrer noopener"
+            >
+              Search Google
+            </a>
+          </div>
         )}
       </main>
-
-      <footer className="results-foot">
-        <span>Results from</span>
-        <a href={duckSearchUrl(query)} target="_blank" rel="noreferrer noopener">
-          DuckDuckGo
-        </a>
-        <span className="results-foot-sep">·</span>
-        <a href={buildGoogleUrl(query)} target="_blank" rel="noreferrer noopener">
-          Google
-        </a>
-      </footer>
     </div>
   )
 }

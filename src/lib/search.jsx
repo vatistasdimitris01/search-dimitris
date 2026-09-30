@@ -16,10 +16,6 @@
 export const DDG_API = 'https://api.duckduckgo.com/'
 export const WIKI_API = 'https://en.wikipedia.org/w/api.php'
 
-export function duckSearchUrl(query) {
-  return 'https://duckduckgo.com/?q=' + encodeURIComponent(query.trim())
-}
-
 export function wikipediaUrl(title) {
   return 'https://en.wikipedia.org/wiki/' + encodeURIComponent(String(title).replace(/ /g, '_'))
 }

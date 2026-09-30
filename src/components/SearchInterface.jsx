@@ -433,7 +433,7 @@ export default function SearchInterface({ onSearch }) {
                     <span className="setting-hint">
                       {provider === 'google'
                         ? 'Leaves the site for Google'
-                        : 'Off — DuckDuckGo results open here'}
+                        : 'Off — results open right here'}
                     </span>
                   </span>
                 </span>
