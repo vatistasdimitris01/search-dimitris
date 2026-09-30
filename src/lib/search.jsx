@@ -8,13 +8,17 @@
  *   1. DuckDuckGo's official Instant Answer API (api.duckduckgo.com) — the real
  *      DuckDuckGo answer: headline, abstract, image, source and related topics.
  *   2. Wikipedia's search API — real article links with intros and thumbnails.
+ *   3. Wikimedia Commons image search — a visual strip of real photos.
+ *   4. Open Library search — real book links with covers and authors.
  *
  * Anything else (a genuine web SERP) is always offered as a link out to
- * duckduckgo.com / google.com so the user is never trapped in a thin page.
+ * google.com so the user is never trapped in a thin page.
  */
 
 export const DDG_API = 'https://api.duckduckgo.com/'
 export const WIKI_API = 'https://en.wikipedia.org/w/api.php'
+export const COMMONS_API = 'https://commons.wikimedia.org/w/api.php'
+export const OPENLIB_API = 'https://openlibrary.org/search.json'
 
 export function wikipediaUrl(title) {
   return 'https://en.wikipedia.org/wiki/' + encodeURIComponent(String(title).replace(/ /g, '_'))
@@ -216,4 +220,70 @@ export const fetchDuckAnswerWithTimeout = (query) =>
   withTimeout(retry(() => fetchDuckAnswer(query)), 12000)
 
 export const fetchWikiResultsWithTimeout = (query) =>
-  withTimeout(retry(() => fetchWikiResults(query, 8), 2, 250), 9000)
+  withTimeout(retry(() => fetchWikiResults(query, 10), 2, 250), 9000)
+
+/** Image results from Wikimedia Commons (same CORS-friendly API family). */
+export async function fetchCommonsImages(query, limit = 8) {
+  const url =
+    COMMONS_API +
+    '?action=query&generator=search&gsrsearch=' +
+    encodeURIComponent(query.trim()) +
+    '&gsrnamespace=6&gsrlimit=' +
+    limit +
+    '&prop=imageinfo&iiprop=url|size&iiurlwidth=400&format=json&origin=*'
+
+  const response = await fetch(url)
+  if (!response.ok) throw new Error('Commons request failed')
+  const data = await response.json()
+  const pages = (data.query && data.query.pages) || {}
+
+  return Object.values(pages)
+    .map((page) => {
+      const info = (page.imageinfo && page.imageinfo[0]) || {}
+      const title = (page.title || '').replace(/^File:/, '')
+      return {
+        title,
+        alt: title.replace(/\.[a-z0-9]+$/i, '').replace(/_/g, ' '),
+        url:
+          'https://commons.wikimedia.org/wiki/' +
+          encodeURIComponent((page.title || '').replace(/ /g, '_')),
+        image: info.thumburl || info.url || '',
+        width: info.thumbwidth || info.width || 0,
+      }
+    })
+    .filter((item) => item.image && item.width >= 120)
+    .sort((a, b) => (a.index || 0) - (b.index || 0))
+    .slice(0, limit)
+}
+
+/** Book results from Open Library (key-free, CORS-enabled). */
+export async function fetchBooks(query, limit = 5) {
+  const url =
+    OPENLIB_API +
+    '?q=' +
+    encodeURIComponent(query.trim()) +
+    '&limit=' +
+    limit +
+    '&fields=key,title,author_name,cover_i'
+
+  const response = await fetch(url)
+  if (!response.ok) throw new Error('Open Library request failed')
+  const data = await response.json()
+
+  return ((data && data.docs) || [])
+    .map((doc) => ({
+      title: doc.title || '',
+      author: ((doc.author_name || [])[0] || '').trim(),
+      url: 'https://openlibrary.org' + (doc.key || ''),
+      host: 'openlibrary.org',
+      image: doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : '',
+    }))
+    .filter((book) => book.title && book.url)
+    .slice(0, limit)
+}
+
+export const fetchCommonsImagesWithTimeout = (query) =>
+  withTimeout(retry(() => fetchCommonsImages(query, 8), 2, 250), 9000)
+
+export const fetchBooksWithTimeout = (query) =>
+  withTimeout(retry(() => fetchBooks(query, 5), 2, 250), 9000)

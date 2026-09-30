@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { buildGoogleUrl, highlightParts } from '../lib/suggestions.jsx'
 import {
+  fetchBooksWithTimeout,
+  fetchCommonsImagesWithTimeout,
   fetchDuckAnswerWithTimeout,
   fetchWikiResultsWithTimeout,
   hostOf,
@@ -99,6 +101,29 @@ function Thumb({ page }) {
   )
 }
 
+/** Book cover that falls back to a letter tile if the cover 404s. */
+function BookCover({ book }) {
+  const [failed, setFailed] = useState(false)
+  if (book.image && !failed) {
+    return (
+      <img
+        className="book-cover"
+        src={book.image}
+        alt=""
+        width="46"
+        height="68"
+        loading="lazy"
+        onError={() => setFailed(true)}
+      />
+    )
+  }
+  return (
+    <span className="book-cover book-cover-fallback" aria-hidden="true">
+      {book.title.charAt(0)}
+    </span>
+  )
+}
+
 /** Deterministic hue per host, so favicon letters stay stable between loads. */
 function faviconStyle(host) {
   let hash = 0
@@ -113,10 +138,16 @@ const EMPTY = {
   loading: true,
   duck: null,
   wiki: [],
+  commons: [],
+  books: [],
   duckFailed: false,
   wikiFailed: false,
+  commonsFailed: false,
+  booksFailed: false,
   duckDone: false,
   wikiDone: false,
+  commonsDone: false,
+  booksDone: false,
 }
 
 export default function ResultsPage({ query, onSearch, onHome }) {
@@ -136,8 +167,8 @@ export default function ResultsPage({ query, onSearch, onHome }) {
     }
   }, [query])
 
-  // DuckDuckGo and Wikipedia resolve independently; each patches the page in
-  // as soon as it lands, so a slow source never holds back the other one.
+  // All four sources resolve independently; each patches the page in as soon
+  // as it lands, so a slow source never holds back the others.
   useEffect(() => {
     let cancelled = false
 
@@ -148,7 +179,7 @@ export default function ResultsPage({ query, onSearch, onHome }) {
       if (cancelled) return
       setState((prev) => {
         const next = { ...prev, ...patch }
-        next.loading = !(next.duckDone && next.wikiDone)
+        next.loading = !(next.duckDone && next.wikiDone && next.commonsDone && next.booksDone)
         return next
       })
     }
@@ -160,6 +191,14 @@ export default function ResultsPage({ query, onSearch, onHome }) {
     fetchWikiResultsWithTimeout(query)
       .then((wiki) => settle({ wiki, wikiDone: true }))
       .catch(() => settle({ wikiFailed: true, wikiDone: true }))
+
+    fetchCommonsImagesWithTimeout(query)
+      .then((commons) => settle({ commons, commonsDone: true }))
+      .catch(() => settle({ commonsFailed: true, commonsDone: true }))
+
+    fetchBooksWithTimeout(query)
+      .then((books) => settle({ books, booksDone: true }))
+      .catch(() => settle({ booksFailed: true, booksDone: true }))
 
     return () => {
       cancelled = true
@@ -173,8 +212,13 @@ export default function ResultsPage({ query, onSearch, onHome }) {
   }
 
   const duck = state.duck
-  const total = (duck?.related?.length || 0) + state.wiki.length
-  const bothFailed = state.duckFailed && state.wikiFailed
+  const total =
+    (duck?.related?.length || 0) +
+    state.wiki.length +
+    state.commons.length +
+    state.books.length
+  const allFailed =
+    state.duckFailed && state.wikiFailed && state.commonsFailed && state.booksFailed
 
   return (
     <div className="page results-page">
@@ -220,9 +264,9 @@ export default function ResultsPage({ query, onSearch, onHome }) {
           )}
         </div>
 
-        {state.duckFailed && !state.wikiFailed && !state.loading && (
+        {state.duckFailed && !state.loading && (
           <p className="results-note">
-            Quick answers are unavailable right now — showing articles only.
+            Quick answers are unavailable right now — showing the rest below.
           </p>
         )}
 
@@ -283,10 +327,38 @@ export default function ResultsPage({ query, onSearch, onHome }) {
             </div>
           </article>
         ) : (
-          state.loading && (
+          !state.duckDone && (
             <div className="result-list" aria-live="polite" aria-busy="true">
               <span className="sr-only">Searching…</span>
               <AnswerSkeleton />
+            </div>
+          )
+        )}
+
+        {state.commons.length > 0 ? (
+          <>
+            <h2 className="results-section">Images</h2>
+            <div className="image-strip">
+              {state.commons.map((item) => (
+                <a
+                  className="image-card"
+                  key={item.url}
+                  href={item.url}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  title={item.alt}
+                >
+                  <img src={item.image} alt={item.alt} loading="lazy" />
+                </a>
+              ))}
+            </div>
+          </>
+        ) : (
+          !state.commonsDone && (
+            <div className="image-strip" aria-hidden="true">
+              {[0, 1, 2, 3].map((i) => (
+                <div className="shimmer image-card-skel" key={i} />
+              ))}
             </div>
           )
         )}
@@ -319,11 +391,48 @@ export default function ResultsPage({ query, onSearch, onHome }) {
             </div>
           </>
         ) : (
-          state.loading && (
+          !state.wikiDone && (
             <div className="result-list" aria-live="polite" aria-busy="true">
               {[0, 1, 2, 3].map((i) => (
                 <ResultSkeleton key={i} />
               ))}
+            </div>
+          )
+        )}
+
+        {state.books.length > 0 ? (
+          <>
+            <h2 className="results-section">Books</h2>
+            <div className="result-list">
+              {state.books.map((book) => (
+                <a
+                  className="result-row book-row"
+                  key={book.url}
+                  href={book.url}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                >
+                  <BookCover book={book} />
+                  <span className="book-main">
+                    <span className="result-head">
+                      <span className="result-url">{book.host}</span>
+                    </span>
+                    <span className="result-title">
+                      <Highlighted text={book.title} query={query} />
+                    </span>
+                    {book.author && (
+                      <span className="result-snippet">{book.author}</span>
+                    )}
+                  </span>
+                </a>
+              ))}
+            </div>
+          </>
+        ) : (
+          !state.booksDone && (
+            <div className="result-list" aria-hidden="true">
+              <ResultSkeleton />
+              <ResultSkeleton />
             </div>
           )
         )}
@@ -347,14 +456,14 @@ export default function ResultsPage({ query, onSearch, onHome }) {
           </>
         )}
 
-        {!state.loading && bothFailed && (
+        {!state.loading && allFailed && (
           <p className="results-empty">
             <strong>Could not load results</strong>
             Check your connection and try again.
           </p>
         )}
 
-        {!state.loading && !bothFailed && total === 0 && (
+        {!state.loading && !allFailed && total === 0 && (
           <div className="results-empty">
             <strong>No results for this one</strong>
             Try different wording, or search Google instead.

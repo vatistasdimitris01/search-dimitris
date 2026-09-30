@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "rewrites": [{ "source": "/((?!assets/|favicon|safari-pinned-tab|apple-touch-icon).*)", "destination": "/index.html" }],
+  "rewrites": [{ "source": "/((?!assets/|favicon|icon-512|safari-pinned-tab|apple-touch-icon|manifest).*)", "destination": "/index.html" }],
   "headers": [
     {
       "source": "/assets/(.*)",
