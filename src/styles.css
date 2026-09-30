@@ -894,10 +894,9 @@ input:checked + .slider:before { transform: translateX(16px); }
   width: 92px;
   height: 92px;
   flex: 0 0 92px;
-  object-fit: contain;
+  object-fit: cover;
   border-radius: 12px;
-  background: #fff;
-  padding: 6px;
+  background: color-mix(in srgb, var(--text) 8%, transparent);
 }
 
 .answer-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; }

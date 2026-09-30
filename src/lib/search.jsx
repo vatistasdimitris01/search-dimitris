@@ -42,7 +42,7 @@ export function stripHtml(value) {
     .trim()
 }
 
-function hostOf(url) {
+export function hostOf(url) {
   try {
     return new URL(url).hostname.replace(/^www\./, '')
   } catch {
@@ -85,6 +85,24 @@ function collectTopics(topics, seen, out) {
   }
 }
 
+/** Wikipedia article thumbnail for an en.wikipedia.org/wiki/… URL. */
+async function fetchWikiThumbnailForUrl(abstractUrl) {
+  const match = /en\.wikipedia\.org\/wiki\/(.+?)(?:[#?]|$)/.exec(abstractUrl || '')
+  if (!match) return ''
+  const title = decodeURIComponent(match[1].replace(/_/g, ' '))
+  const url =
+    WIKI_API +
+    '?action=query&titles=' +
+    encodeURIComponent(title) +
+    '&prop=pageimages&piprop=thumbnail&pithumbsize=400&format=json&origin=*&redirects=1'
+  const response = await fetch(url)
+  if (!response.ok) return ''
+  const data = await response.json()
+  const pages = (data.query && data.query.pages) || {}
+  const page = Object.values(pages)[0] || {}
+  return (page.thumbnail && page.thumbnail.source) || ''
+}
+
 export async function fetchDuckAnswer(query) {
   const url =
     DDG_API +
@@ -109,6 +127,17 @@ export async function fetchDuckAnswer(query) {
   const abstractUrl = absoluteUrl(data.AbstractURL)
   const definitionUrl = absoluteUrl(data.DefinitionURL)
 
+  // DuckDuckGo often returns no image at all — fall back to the Wikipedia
+  // article thumbnail for the abstract so the card never shows a blank box.
+  let image = absoluteUrl(data.Image) || ''
+  if (!image && abstractUrl) {
+    try {
+      image = await fetchWikiThumbnailForUrl(abstractUrl)
+    } catch {
+      /* keep it imageless rather than failing the whole answer */
+    }
+  }
+
   return {
     heading: data.Heading || stripHtml(data.Answer) || query.trim(),
     answer: stripHtml(data.Answer) || '',
@@ -118,7 +147,7 @@ export async function fetchDuckAnswer(query) {
     abstract: stripHtml(data.Abstract) || '',
     abstractUrl: abstractUrl || '',
     abstractSource: data.AbstractSource || '',
-    image: absoluteUrl(data.Image) || '',
+    image,
     redirect: absoluteUrl(data.Redirect) || '',
     related: related.slice(0, 6),
     hasAnswer:

@@ -3,6 +3,7 @@ import { buildGoogleUrl, highlightParts } from '../lib/suggestions.jsx'
 import {
   fetchDuckAnswerWithTimeout,
   fetchWikiResultsWithTimeout,
+  hostOf,
 } from '../lib/search.jsx'
 
 function ArrowLeftIcon() {
@@ -75,6 +76,29 @@ function AnswerSkeleton() {
   )
 }
 
+/** Article thumbnail that falls back to a letter tile if the image 404s. */
+function Thumb({ page }) {
+  const [failed, setFailed] = useState(false)
+  if (page.image && !failed) {
+    return (
+      <img
+        className="result-favicon has-thumb"
+        src={page.image}
+        alt=""
+        width="18"
+        height="18"
+        loading="lazy"
+        onError={() => setFailed(true)}
+      />
+    )
+  }
+  return (
+    <span className="result-favicon" style={faviconStyle(page.host)} aria-hidden="true">
+      {page.title.charAt(0)}
+    </span>
+  )
+}
+
 /** Deterministic hue per host, so favicon letters stay stable between loads. */
 function faviconStyle(host) {
   let hash = 0
@@ -98,6 +122,7 @@ const EMPTY = {
 export default function ResultsPage({ query, onSearch, onHome }) {
   const [input, setInput] = useState(query)
   const [state, setState] = useState(EMPTY)
+  const [imgOk, setImgOk] = useState(true)
   const inputRef = useRef(null)
 
   useEffect(() => {
@@ -117,6 +142,7 @@ export default function ResultsPage({ query, onSearch, onHome }) {
     let cancelled = false
 
     setState(EMPTY)
+    setImgOk(true)
 
     const settle = (patch) => {
       if (cancelled) return
@@ -202,20 +228,29 @@ export default function ResultsPage({ query, onSearch, onHome }) {
 
         {duck?.hasAnswer ? (
           <article className="answer-card">
-            {duck.image ? (
-              <img className="answer-image" src={duck.image} alt="" loading="lazy" />
-            ) : (
-              <div className="answer-image" aria-hidden="true" />
+            {duck.image && imgOk && (
+              <img
+                className="answer-image"
+                src={duck.image}
+                alt=""
+                loading="eager"
+                fetchPriority="high"
+                onError={() => setImgOk(false)}
+              />
             )}
 
             <div className="answer-main">
-              {(duck.abstractSource || duck.abstractUrl) && (
+              {(duck.abstractUrl || duck.abstractSource || duck.definitionUrl) && (
                 <div className="answer-head">
-                  {duck.abstractSource && duck.abstractSource}
-                  {duck.abstractSource && duck.abstractUrl && ' · '}
-                  {duck.abstractUrl && (
+                  {duck.abstractUrl ? (
                     <a href={duck.abstractUrl} target="_blank" rel="noreferrer noopener">
-                      Source
+                      {duck.abstractSource || hostOf(duck.abstractUrl)}
+                    </a>
+                  ) : duck.abstractSource ? (
+                    <span>{duck.abstractSource}</span>
+                  ) : (
+                    <a href={duck.definitionUrl} target="_blank" rel="noreferrer noopener">
+                      {duck.definitionSource || hostOf(duck.definitionUrl)}
                     </a>
                   )}
                 </div>
@@ -269,24 +304,7 @@ export default function ResultsPage({ query, onSearch, onHome }) {
                   rel="noreferrer noopener"
                 >
                   <div className="result-head">
-                    {page.image ? (
-                      <img
-                        className="result-favicon has-thumb"
-                        src={page.image}
-                        alt=""
-                        width="18"
-                        height="18"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <span
-                        className="result-favicon"
-                        style={faviconStyle(page.host)}
-                        aria-hidden="true"
-                      >
-                        {page.title.charAt(0)}
-                      </span>
-                    )}
+                    <Thumb page={page} />
                     <span className="result-url">{page.url}</span>
                   </div>
 
