@@ -1,15 +1,23 @@
 # Search — Dimitris
 
 A minimal, premium dark search / new-tab interface built with **React + Vite**.
-Type anything, get instant suggestions, press Enter and you're on Google.
+Type anything, get instant suggestions, press Enter and either stay on the site
+for DuckDuckGo-powered results or hand off to Google.
 
 ![preview](https://begin-psi.vercel.app/favicon.svg)
 
 ## Features
 
-- **Real Google search** — Enter, or click the black button. Navigates to
-  `https://www.google.com/search?q=<encoded query>` in the same tab.
-  Handles Unicode, Greek, and special characters.
+- **In-app results page** — DuckDuckGo's Instant Answer API plus Wikipedia
+  articles, rendered at `/search?q=…` with skeleton loading, clickable result
+  rows, related searches and a link out to the full DuckDuckGo SERP.
+- **Streaming results** — the two sources resolve independently and each paints
+  the page as soon as it lands, so neither can hold the other hostage.
+- **Search engine toggle** — in Preferences: *Search on Google* off means results
+  open on this site, on means a redirect to Google. Persisted in `localStorage`.
+- **Robust against flakiness** — DuckDuckGo resets a noticeable share of
+  connections, so requests retry with backoff under a hard timeout, and the page
+  degrades to Wikipedia-only with an explanatory note rather than breaking.
 - **Live suggestions** — Google autocomplete via JSONP
   (`suggestqueries.google.com/...&client=chrome`), with a local fallback list
   when the network blocks it.
@@ -19,14 +27,15 @@ Type anything, get instant suggestions, press Enter and you're on Google.
   search pill once you start typing.
 - **Fading skeleton loader** — intentional, non-blocking shimmer while
   suggestions are generated.
-- **Preferences popup** — gear icon top-left, with a "Hide search button" toggle
-  persisted in `localStorage`.
-- **Random greeting** — one of seven greetings on every page load.
+- **Preferences popup** — gear icon top-left: light/dark theme, search engine,
+  "Hide search button", and city detection for locality queries.
+- **Random greeting** — one of seven greetings on every page load, each word
+  unblurring left to right.
 - **Keyboard support** — `↑` `↓` to navigate, `Enter` to search, `Esc` to close,
   `Tab` to accept the inline suggestion.
 - **Accessible** — semantic landmarks, ARIA combobox/listbox roles, visible focus
   rings, `prefers-reduced-motion` support.
-- **Responsive** — scales from desktop down to mobile.
+- **Responsive** — scales from desktop down to mobile without overflow.
 
 ## Getting started
 
@@ -36,6 +45,10 @@ npm run dev      # start dev server
 npm run build    # production build to dist/
 npm run preview  # preview the production build
 ```
+
+> Note: Chrome blocks cross-origin requests from `http://localhost`, so the
+> in-app results only resolve over `https`. Use `npm run preview` together with
+> a tunnel, or just test the deployed URL.
 
 ## Stack
 
@@ -49,19 +62,35 @@ npm run preview  # preview the production build
 ```
 src/
   components/
-    SearchInterface.jsx   # state, keyboard nav, search redirect
+    SearchInterface.jsx   # state, keyboard nav, search routing, preferences
     SearchInput.jsx       # pill input + inline ghost suggestion
     Suggestions.jsx       # autocomplete list
+    ResultsPage.jsx       # /search?q=… results view with skeletons
   lib/
     suggestions.jsx       # live + local suggestion engine, greeting
-  App.jsx
+    search.jsx            # DuckDuckGo + Wikipedia data sources
+    location.jsx          # optional city detection
+  App.jsx                 # tiny history-based router (home / results)
   main.jsx
   styles.css
 ```
 
+## Data sources
+
+| Source | Endpoint | CORS | Used for |
+| --- | --- | --- | --- |
+| DuckDuckGo Instant Answer | `api.duckduckgo.com` | `*` | Answer card, related searches |
+| Wikipedia search | `en.wikipedia.org/w/api.php` | `*` | Article result rows |
+| Google autocomplete | `suggestqueries.google.com` | JSONP | Typing suggestions |
+
+DuckDuckGo's HTML endpoints (`html.` / `lite.`) answer `403` to any
+programmatic request, so a real SERP cannot be scraped without a paid API key.
+Anything the in-app page cannot answer links straight out to DuckDuckGo or Google.
+
 ## Deployment
 
-Deployed to Vercel:
+Deployed to Vercel. `vercel.json` holds the SPA rewrite that serves
+`/search?q=…` from `index.html`:
 
 ```bash
 npm install

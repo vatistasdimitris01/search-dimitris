@@ -13,6 +13,7 @@ const LIST_ID = 'suggestions'
 const HIDE_BTN_KEY = 'hideSearchBtn'
 const THEME_KEY = 'theme'
 const CITY_KEY = 'city'
+const PROVIDER_KEY = 'searchProvider'
 
 function readStore(key, fallback) {
   try {
@@ -31,10 +32,18 @@ function writeStore(key, value) {
   }
 }
 
-export function doSearch(query) {
+/**
+ * 'google' hands the query to Google in this tab; 'inside' opens the in-app
+ * results page, which is fed by DuckDuckGo.
+ */
+export function doSearch(query, provider, navigate) {
   const q = query.trim()
   if (!q) return
-  window.location.href = buildGoogleUrl(q)
+  if (provider === 'google') {
+    window.location.href = buildGoogleUrl(q)
+    return
+  }
+  navigate(q)
 }
 
 function SunIcon() {
@@ -107,6 +116,15 @@ function RefreshIcon() {
   )
 }
 
+function GlobeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18M12 3c2.4 2.6 3.6 5.6 3.6 9S14.4 18.4 12 21c-2.4-2.6-3.6-5.6-3.6-9S9.6 5.6 12 3z" />
+    </svg>
+  )
+}
+
 function SkeletonIcon() {
   return (
     <svg viewBox="0 0 24 24" className="skeleton-icon" aria-hidden="true">
@@ -115,7 +133,7 @@ function SkeletonIcon() {
   )
 }
 
-export default function SearchInterface() {
+export default function SearchInterface({ onSearch }) {
   // The greeting is deliberately selected again on every page load,
   // so refreshing can produce a different greeting.
   const [greeting] = useState(pickGreeting)
@@ -127,6 +145,9 @@ export default function SearchInterface() {
   const [active, setActive] = useState(-1)
   const [popupOpen, setPopupOpen] = useState(false)
   const [hideBtn, setHideBtn] = useState(() => readStore(HIDE_BTN_KEY, 'false') === 'true')
+  const [provider, setProvider] = useState(() =>
+    readStore(PROVIDER_KEY, 'inside') === 'google' ? 'google' : 'inside',
+  )
   const [theme, setTheme] = useState(() =>
     readStore(THEME_KEY, 'dark') === 'light' ? 'light' : 'dark',
   )
@@ -226,6 +247,12 @@ export default function SearchInterface() {
     writeStore(HIDE_BTN_KEY, checked ? 'true' : 'false')
   }
 
+  const handleToggleProvider = (checked) => {
+    const next = checked ? 'google' : 'inside'
+    setProvider(next)
+    writeStore(PROVIDER_KEY, next)
+  }
+
   const handleChange = (value) => {
     setQuery(value)
     if (timerRef.current) clearTimeout(timerRef.current)
@@ -315,12 +342,12 @@ export default function SearchInterface() {
 
   const handleSubmit = (event) => {
     event.preventDefault()
-    doSearch(query)
+    doSearch(query, provider, onSearch)
   }
 
   const handleSelect = (value) => {
     setQuery(value)
-    doSearch(value)
+    doSearch(value, provider, onSearch)
   }
 
   const handleInputFocus = () => {
@@ -392,6 +419,34 @@ export default function SearchInterface() {
                   <SunIcon />
                 </button>
               </div>
+            </div>
+
+            <div className="popup-section">
+              <div className="popup-section-label">Search engine</div>
+              <label className="setting-row">
+                <span className="setting-label">
+                  <span className="setting-icon" aria-hidden="true">
+                    <GlobeIcon />
+                  </span>
+                  <span className="setting-text">
+                    <span className="setting-title">Search on Google</span>
+                    <span className="setting-hint">
+                      {provider === 'google'
+                        ? 'Leaves the site for Google'
+                        : 'Off — DuckDuckGo results open here'}
+                    </span>
+                  </span>
+                </span>
+                <span className="switch">
+                  <input
+                    type="checkbox"
+                    checked={provider === 'google'}
+                    onChange={(e) => handleToggleProvider(e.target.checked)}
+                    aria-label="Search on Google"
+                  />
+                  <span className="slider"></span>
+                </span>
+              </label>
             </div>
 
             <div className="popup-section">
